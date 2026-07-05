@@ -34,6 +34,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-activate-license').addEventListener('click', activateLicense);
   document.getElementById('btn-deactivate-license').addEventListener('click', deactivateLicense);
   document.getElementById('btn-promo-go-pro').addEventListener('click', () => switchTab('tab-license'));
+  document.getElementById('btn-buy-pro-key').addEventListener('click', () => {
+    chrome.tabs.create({ url: 'https://novastrikes.gumroad.com/l/indeedharvest' });
+  });
   
   // Settings checkbox listeners
   const checkboxes = document.querySelectorAll('.checkbox-group input[type="checkbox"]');
