@@ -1,6 +1,6 @@
 // IndeedHarvest - Popup Script
 
-const GUMROAD_PRODUCT_ID = 'indeedharvest_pro'; // Replace with your Gumroad Product ID
+const GUMROAD_PERMALINK = 'indeedharvest'; // Gumroad Product Permalink
 const DEV_LICENSE_KEYS = ['DEV-UNLOCK-HARVEST', 'TEST-PRO-KEY'];
 
 // State variables
@@ -366,7 +366,7 @@ async function activateLicense() {
   // Real Gumroad API check
   try {
     const bodyParams = new URLSearchParams();
-    bodyParams.append('product_id', GUMROAD_PRODUCT_ID);
+    bodyParams.append('product_permalink', GUMROAD_PERMALINK);
     bodyParams.append('license_key', licenseKey);
     bodyParams.append('increment_uses_count', 'true');
     
@@ -380,10 +380,10 @@ async function activateLicense() {
     if (response.ok && data.success) {
       unlockProSuccess(licenseKey);
     } else {
-      showError(data.message || 'Verification failed. Invalid license key.');
+      showError(data.message || 'Invalid license key, please check and try again.');
     }
   } catch (error) {
-    showError('Network error connecting to Gumroad. Please try again.');
+    showError("Connection error: Couldn't reach Gumroad. Please check your internet connection and try again.");
   } finally {
     activateBtn.disabled = false;
     activateBtn.innerText = 'Activate License';
@@ -391,9 +391,11 @@ async function activateLicense() {
 }
 
 function unlockProSuccess(key) {
+  const verifiedAt = new Date().toISOString();
   chrome.storage.local.set({
     proUnlocked: true,
-    licenseKey: key
+    licenseKey: key,
+    licenseVerifiedAt: verifiedAt
   }, () => {
     proUnlocked = true;
     updateUIMode(true);
@@ -407,7 +409,8 @@ function deactivateLicense() {
   if (confirm('Are you sure you want to deactivate your Pro license?')) {
     chrome.storage.local.set({
       proUnlocked: false,
-      licenseKey: ''
+      licenseKey: '',
+      licenseVerifiedAt: ''
     }, () => {
       proUnlocked = false;
       updateUIMode(false);

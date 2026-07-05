@@ -58,8 +58,10 @@ body {
   gap: 8px;
 }
 
-.logo-icon {
-  font-size: 22px;
+.logo-icon-img {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
 }
 
 .logo-text h1 {

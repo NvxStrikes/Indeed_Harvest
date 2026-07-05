@@ -59,19 +59,16 @@ chrome.runtime.onInstalled.addListener(() => {
 // Listener for messages between content script and popup (or for background tasks if needed)
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'verifyLicense') {
-    // We can do license verification in background if requested, but popup can do it too.
-    // Keeping it here gives us a fallback in case popup has CORB/CORS issues in some environments.
     const url = 'https://api.gumroad.com/v2/licenses/verify';
+    
+    const bodyParams = new URLSearchParams();
+    bodyParams.append('product_permalink', message.productPermalink || 'indeedharvest');
+    bodyParams.append('license_key', message.licenseKey);
+    bodyParams.append('increment_uses_count', 'true');
+    
     fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        product_id: message.productId,
-        license_key: message.licenseKey,
-        increment_uses_count: true
-      })
+      body: bodyParams
     })
     .then(response => response.json())
     .then(data => {
