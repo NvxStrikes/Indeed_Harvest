@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IndeedHarvest</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="logo-area">
+        <span class="logo-icon">🌾</span>
+        <div class="logo-text">
+          <h1>IndeedHarvest</h1>
+          <span class="logo-sub">by NovaStrikes</span>
+        </div>
+      </div>
+      <div class="badge-area">
+        <span id="status-badge" class="badge badge-inactive">Checking page...</span>
+        <span id="pro-badge" class="badge badge-pro" style="display: none;">PRO</span>
+      </div>
+    </header>
+
+    <!-- Main Navigation Tabs -->
+    <nav class="app-nav">
+      <button class="nav-btn active" data-tab="tab-scrape">🌾 Scrape</button>
+      <button class="nav-btn" data-tab="tab-settings">⚙️ Settings</button>
+      <button class="nav-btn" data-tab="tab-history">⏳ History</button>
+      <button class="nav-btn" id="nav-license-btn" data-tab="tab-license">🔑 Pro Key</button>
+    </nav>
+
+    <!-- Content Area -->
+    <main class="app-main">
+      
+      <!-- Tab 1: Scrape -->
+      <section id="tab-scrape" class="tab-content active">
+        <!-- Not on Indeed State -->
+        <div id="state-not-indeed" class="state-container">
+          <div class="state-icon">🌐</div>
+          <h3>Not on Indeed Search Results</h3>
+          <p>Please navigate to Indeed's job search page to start harvesting job listings.</p>
+          <a href="https://www.indeed.com" target="_blank" class="btn btn-primary btn-center">Go to Indeed.com</a>
+        </div>
+
+        <!-- On Indeed State -->
+        <div id="state-active-indeed" class="state-container" style="display: none;">
+          <!-- Job Count Display -->
+          <div class="count-card">
+            <div class="count-number" id="jobs-detected-count">0</div>
+            <div class="count-label">Job Cards Detected on Page</div>
+          </div>
+
+          <!-- Scraping Control Center -->
+          <div class="control-box">
+            <!-- Free Mode Interface -->
+            <div id="free-controls" class="mode-controls">
+              <div class="limit-status">
+                <span class="limit-text">Free Tier Limit: <strong id="free-scraped-counter">0</strong>/25 jobs scraped this session</span>
+                <div class="limit-bar"><div id="limit-bar-fill" class="limit-bar-fill" style="width: 0%;"></div></div>
+              </div>
+              <div class="btn-group-vertical">
+                <button id="btn-scrape-free" class="btn btn-primary">🌾 Scrape Current Page</button>
+              </div>
+            </div>
+
+            <!-- Pro Mode Interface -->
+            <div id="pro-controls" class="mode-controls" style="display: none;">
+              <div class="pro-config-row">
+                <label for="max-pages">Pages to scrape:</label>
+                <input type="number" id="max-pages" min="1" max="100" value="3">
+              </div>
+              <div class="keyword-filters-group">
+                <div class="filter-field">
+                  <label for="filter-include">Must contain (comma separated):</label>
+                  <input type="text" id="filter-include" placeholder="e.g. Remote, Senior, React">
+                </div>
+                <div class="filter-field">
+                  <label for="filter-exclude">Exclude (comma separated):</label>
+                  <input type="text" id="filter-exclude" placeholder="e.g. unpaid, internship, junior">
+                </div>
+              </div>
+              <div class="btn-group-vertical">
+                <button id="btn-scrape-pro" class="btn btn-primary">⚡ Start Multi-Page Scrape</button>
+              </div>
+            </div>
+            
+            <!-- Scrape Progress/Active Scraping State -->
+            <div id="scraping-progress-box" class="progress-box" style="display: none;">
+              <div class="progress-text" id="progress-status-msg">Scraping page 1...</div>
+              <div class="spinner"></div>
+              <button id="btn-cancel-scrape" class="btn btn-danger btn-sm">Cancel Scrape</button>
+            </div>
+          </div>
+
+          <!-- Export Area -->
+          <div id="export-box" class="export-box" style="display: none;">
+            <h4>📦 Export Harvested Data</h4>
+            <span id="export-count-label" class="export-count-label">0 jobs ready</span>
+            <div class="btn-group" id="free-exports">
+              <button id="btn-export-csv-free" class="btn btn-success btn-full">Export CSV</button>
+            </div>
+            <div class="btn-group" id="pro-exports" style="display: none;">
+              <button id="btn-export-csv-pro" class="btn btn-success">CSV</button>
+              <button id="btn-export-xlsx-pro" class="btn btn-success">XLSX</button>
+              <button id="btn-export-json-pro" class="btn btn-success">JSON</button>
+            </div>
+          </div>
+
+          <!-- Free Tier Promotion Banner -->
+          <div id="free-promo-banner" class="promo-banner">
+            <div class="promo-header">🌟 Upgrade to IndeedHarvest Pro</div>
+            <p>Export unlimited jobs, auto-scroll pages, scrape full descriptions/direct apply links, filter keywords, and export to XLSX/JSON.</p>
+            <button class="btn btn-warning btn-sm" id="btn-promo-go-pro">Unlock Pro - $17 One-time</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab 2: Settings -->
+      <section id="tab-settings" class="tab-content">
+        <h3>⚙️ Column Selection</h3>
+        <p class="settings-desc">Choose which columns will be included in the exported spreadsheet.</p>
+        
+        <div class="checkbox-group">
+          <label class="checkbox-container">
+            <input type="checkbox" id="col-title" checked disabled>
+            <span class="checkmark"></span> Job Title <span class="badge badge-required">Required</span>
+          </label>
+          <label class="checkbox-container">
+            <input type="checkbox" id="col-company" checked>
+            <span class="checkmark"></span> Company Name
+          </label>
+          <label class="checkbox-container">
+            <input type="checkbox" id="col-location" checked>
+            <span class="checkmark"></span> Location
+          </label>
+          <label class="checkbox-container">
+            <input type="checkbox" id="col-salary" checked>
+            <span class="checkmark"></span> Salary / Compensation
+          </label>
+          <label class="checkbox-container">
+            <input type="checkbox" id="col-date" checked>
+            <span class="checkmark"></span> Posted Date
+          </label>
+          <label class="checkbox-container">
+            <input type="checkbox" id="col-url" checked>
+            <span class="checkmark"></span> Job URL
+          </label>
+          
+          <div class="pro-settings-divider">PRO Features</div>
+          
+          <label class="checkbox-container pro-gated">
+            <input type="checkbox" id="col-description" checked>
+            <span class="checkmark"></span> Full Job Description 🔑
+          </label>
+          <label class="checkbox-container pro-gated">
+            <input type="checkbox" id="col-companySize" checked>
+            <span class="checkmark"></span> Company Size / Details 🔑
+          </label>
+          <label class="checkbox-container pro-gated">
+            <input type="checkbox" id="col-workplaceType" checked>
+            <span class="checkmark"></span> Workplace Badge (Remote/Hybrid) 🔑
+          </label>
+          <label class="checkbox-container pro-gated">
+            <input type="checkbox" id="col-applyLink" checked>
+            <span class="checkmark"></span> Direct Application Link 🔑
+          </label>
+        </div>
+      </section>
+
+      <!-- Tab 3: History -->
+      <section id="tab-history" class="tab-content">
+        <h3>⏳ Last Scrape Sessions</h3>
+        <p class="settings-desc">Access and re-export your last 5 scraping sessions cache.</p>
+        
+        <div id="history-list" class="history-list-container">
+          <div class="empty-history">No sessions recorded yet. Scrape jobs to populate history.</div>
+        </div>
+      </section>
+
+      <!-- Tab 4: Pro License -->
+      <section id="tab-license" class="tab-content">
+        <h3>🔑 Unlock IndeedHarvest Pro</h3>
+        <p class="settings-desc">Unlock unlimited exports, automated multi-page scraping, keyword filters, and full text descriptions.</p>
+        
+        <div class="license-box">
+          <div id="license-unlocked-card" class="license-card success-card" style="display: none;">
+            <h4>⚡ PRO Version Active</h4>
+            <p>Your license key is verified. Thank you for supporting IndeedHarvest!</p>
+            <div class="active-key-display">Key: <span id="display-license-key">••••-••••-••••</span></div>
+            <button id="btn-deactivate-license" class="btn btn-secondary btn-sm">Deactivate License</button>
+          </div>
+
+          <div id="license-locked-card" class="license-card">
+            <div class="license-field">
+              <label for="license-key-input">Enter Gumroad Pro License Key:</label>
+              <input type="text" id="license-key-input" placeholder="e.g. GUMROAD-XXXXX-XXXXX">
+            </div>
+            <button id="btn-activate-license" class="btn btn-warning">Activate License</button>
+            <div id="license-error-msg" class="error-msg" style="display: none;">Invalid license key. Please check and try again.</div>
+            
+            <div class="buy-section">
+              <p>Don't have a license key yet?</p>
+              <a href="https://gumroad.com" target="_blank" class="btn btn-primary btn-center">Buy Pro Key ($17)</a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <div class="footer-links">
+        <a href="https://github.com/NvxStrikes/Indeed_Harvest/issues" target="_blank" class="footer-link">🐛 Report Bug / Selector Broke</a>
+        <span class="footer-dot">•</span>
+        <a href="PRIVACY.md" id="link-privacy" class="footer-link">🔒 Privacy</a>
+      </div>
+      <div class="footer-copy">IndeedHarvest v1.0.0. Not affiliated with Indeed, Inc.</div>
+    </footer>
+  </div>
+  
+  <!-- Local SheetJS -->
+  <script src="lib/xlsx.full.min.js"></script>
+  <!-- Main Logic -->
+  <script src="popup.js"></script>
+</body>
+</html>

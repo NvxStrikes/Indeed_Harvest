@@ -1,0 +1,44 @@
+{
+  "manifest_version": 3,
+  "name": "IndeedHarvest",
+  "version": "1.0.0",
+  "description": "Extract job listing data from Indeed search results and export to CSV, XLSX, or JSON. Built by NovaStrikes.",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "*://*.indeed.com/*",
+    "*://*.indeed.co.uk/*",
+    "*://*.indeed.com.pk/*",
+    "*://*.indeed.ca/*",
+    "*://*.indeed.com.au/*",
+    "*://*.indeed.de/*",
+    "*://*.indeed.fr/*",
+    "*://*.indeed.in/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "IndeedHarvest Control Panel"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.indeed.com/*",
+        "*://*.indeed.co.uk/*",
+        "*://*.indeed.com.pk/*",
+        "*://*.indeed.ca/*",
+        "*://*.indeed.com.au/*",
+        "*://*.indeed.de/*",
+        "*://*.indeed.fr/*",
+        "*://*.indeed.in/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

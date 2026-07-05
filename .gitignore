@@ -1,0 +1,14 @@
+# Extension keys and packages
+*.pem
+*.zip
+*.crx
+
+# Editor / OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# Local configuration
+.env
