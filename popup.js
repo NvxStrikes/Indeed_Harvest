@@ -528,13 +528,43 @@ function triggerExport(format) {
 }
 
 function exportData(jobs, format, timestamp) {
-  // Deduplicate baseline
+  // Deduplicate using title+company+location and completeness scoring
+  const countPopulatedFields = (job) => {
+    let score = 0;
+    const fields = ['title', 'company', 'location', 'salary', 'date', 'description', 'companySize', 'workplaceType', 'applyLink'];
+    for (const f of fields) {
+      if (job[f] && job[f].trim() !== '') score++;
+    }
+    const sequentialPatterns = ['0123456789abcdef', 'fedcba9876543210', '789abcdef0123456'];
+    const jkLower = (job.jk || '').toLowerCase();
+    const isFake = !/^[a-fA-F0-9]{16}$/.test(jkLower) || 
+                   sequentialPatterns.some(p => p.includes(jkLower)) || 
+                   /^(.)\1+$/.test(jkLower);
+    if (!isFake) score += 2;
+    return score;
+  };
+
   const deduplicatedJobs = [];
-  const seenJks = new Set();
+  const seenMap = new Map(); // "title|company|location" -> index in deduplicatedJobs
   
   for (const job of jobs) {
-    if (!seenJks.has(job.jk)) {
-      seenJks.add(job.jk);
+    const t = (job.title || '').trim().toLowerCase();
+    const c = (job.company || '').trim().toLowerCase();
+    const l = (job.location || '').trim().toLowerCase();
+    if (!t) continue;
+    
+    const key = `${t}|${c}|${l}`;
+    if (seenMap.has(key)) {
+      const existingIdx = seenMap.get(key);
+      const existingJob = deduplicatedJobs[existingIdx];
+      
+      const existingScore = countPopulatedFields(existingJob);
+      const currentScore = countPopulatedFields(job);
+      if (currentScore > existingScore) {
+        deduplicatedJobs[existingIdx] = job;
+      }
+    } else {
+      seenMap.set(key, deduplicatedJobs.length);
       deduplicatedJobs.push(job);
     }
   }

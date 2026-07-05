@@ -18,8 +18,10 @@ console.log('IndeedHarvest content script loaded.');
 chrome.storage.local.get(['scrapeSession', 'proUnlocked'], (result) => {
   const session = result.scrapeSession;
   if (session && session.active) {
-    console.log('IndeedHarvest: Resuming active scrape session, page:', session.currentPage);
-    resumeScrapeSession(session, !!result.proUnlocked);
+    console.log('IndeedHarvest: Active session detected, waiting 500ms for DOM initialization...');
+    setTimeout(() => {
+      resumeScrapeSession(session, !!result.proUnlocked);
+    }, 500);
   }
 });
 
@@ -64,6 +66,85 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true;
 });
 
+// Helper to identify sequential/repetitive mock keys
+function isFakeJk(jk) {
+  if (!jk || typeof jk !== 'string') return true;
+  if (!/^[a-fA-F0-9]{16}$/.test(jk)) return true;
+  
+  const lowerJk = jk.toLowerCase();
+  const sequentialPatterns = [
+    '0123456789abcdef',
+    'fedcba9876543210',
+    '789abcdef0123456',
+    '1234567890abcdef',
+    'abcdef0123456789'
+  ];
+  for (const pattern of sequentialPatterns) {
+    if (pattern.includes(lowerJk)) return true;
+  }
+  if (/^(.)\1+$/.test(lowerJk)) return true; // repetitive (e.g. 0000000000000000)
+  return false;
+}
+
+// Count populated fields to measure detail completeness
+function countPopulatedFields(job) {
+  let score = 0;
+  const fields = ['title', 'company', 'location', 'salary', 'date', 'description', 'companySize', 'workplaceType', 'applyLink'];
+  for (const f of fields) {
+    if (job[f] && job[f].trim() !== '') {
+      score++;
+    }
+  }
+  if (job.jk && !isFakeJk(job.jk)) {
+    score += 2; // Real key gets higher weight
+  }
+  return score;
+}
+
+// Normalization and completeness deduplication
+function deduplicateJobsList(jobs) {
+  const uniqueJobs = [];
+  const seenMap = new Map(); // "title|company|location" -> index in uniqueJobs
+  
+  for (const job of jobs) {
+    const t = (job.title || '').trim().toLowerCase();
+    const c = (job.company || '').trim().toLowerCase();
+    const l = (job.location || '').trim().toLowerCase();
+    
+    if (!t) continue;
+    
+    const key = `${t}|${c}|${l}`;
+    
+    if (seenMap.has(key)) {
+      const existingIdx = seenMap.get(key);
+      const existingJob = uniqueJobs[existingIdx];
+      
+      const existingScore = countPopulatedFields(existingJob);
+      const currentScore = countPopulatedFields(job);
+      
+      if (currentScore > existingScore) {
+        uniqueJobs[existingIdx] = job;
+      }
+    } else {
+      seenMap.set(key, uniqueJobs.length);
+      uniqueJobs.push(job);
+    }
+  }
+  return uniqueJobs;
+}
+
+// Combine map with list and deduplicate
+function mergeAndDeduplicate(existingJobsMap, newJobsList) {
+  const combined = [...Object.values(existingJobsMap), ...newJobsList];
+  const deduped = deduplicateJobsList(combined);
+  
+  const newMap = {};
+  deduped.forEach(job => {
+    newMap[job.jk] = job;
+  });
+  return newMap;
+}
+
 // Extract jobs visible on current page
 function extractJobsOnPage() {
   const elements = document.querySelectorAll('[data-jk]');
@@ -74,13 +155,18 @@ function extractJobsOnPage() {
     const jk = el.getAttribute('data-jk');
     if (!jk || processedJks.has(jk)) continue;
     
-    // Skip known placeholders/templates
-    if (jk === 'fedcba9876543210' || jk.toLowerCase().includes('placeholder')) continue;
+    // Skip known placeholders/templates and invalid keys
+    if (isFakeJk(jk)) continue;
     
     // Find the enclosing card container
     let container = el;
     if (!el.classList.contains('cardOutline') && !el.querySelector('[data-testid="company-name"]')) {
       container = el.closest('div.cardOutline, div.job_seen_beacon, td.resultContent, li') || el;
+    }
+    
+    // Check if card is visible (skip skeleton loaders that are not rendered)
+    if (container.offsetWidth === 0 && container.offsetHeight === 0) {
+      continue;
     }
     
     const job = extractJobFromCard(container, jk);
@@ -95,7 +181,7 @@ function extractJobsOnPage() {
     }
   }
   
-  return jobs;
+  return deduplicateJobsList(jobs);
 }
 
 // Defensive fallback date extraction
@@ -410,10 +496,8 @@ async function resumeScrapeSession(session, proUnlocked) {
     const currentSession = result.scrapeSession;
     if (!currentSession || !currentSession.active) return; // session cancelled while details loaded
     
-    // Merge new jobs into tempJobs
-    jobs.forEach(job => {
-      currentSession.tempJobs[job.jk] = job;
-    });
+    // Merge new jobs into tempJobs with title+company+location deduplication
+    currentSession.tempJobs = mergeAndDeduplicate(currentSession.tempJobs || {}, jobs);
     
     currentSession.scrapedCount = Object.keys(currentSession.tempJobs).length;
     
@@ -454,12 +538,14 @@ function goToNextPage(session, proUnlocked) {
           if ((newFirstJk && newFirstJk !== oldFirstJk) || newUrl !== oldUrl || checks > 20) {
             clearInterval(checkInterval);
             if (checks <= 20) {
-              console.log('IndeedHarvest: SPA state transition detected. Resuming scrape...');
-              chrome.storage.local.get('scrapeSession', (res) => {
-                if (res.scrapeSession && res.scrapeSession.active) {
-                  resumeScrapeSession(res.scrapeSession, proUnlocked);
-                }
-              });
+              console.log('IndeedHarvest: SPA state transition detected. Waiting 400ms to settle DOM...');
+              setTimeout(() => {
+                chrome.storage.local.get('scrapeSession', (res) => {
+                  if (res.scrapeSession && res.scrapeSession.active) {
+                    resumeScrapeSession(res.scrapeSession, proUnlocked);
+                  }
+                });
+              }, 400);
             }
           }
         }, 500);
