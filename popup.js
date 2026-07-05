@@ -1,6 +1,6 @@
 // IndeedHarvest - Popup Script
 
-const GUMROAD_PERMALINK = 'indeedharvest'; // Gumroad Product Permalink
+const GUMROAD_PRODUCT_ID = 'Wu_Q1_gcogy2qS9mCM0LFw=='; // Gumroad Product ID
 const DEV_LICENSE_KEYS = ['DEV-UNLOCK-HARVEST', 'TEST-PRO-KEY'];
 
 // State variables
@@ -366,7 +366,7 @@ async function activateLicense() {
   // Real Gumroad API check
   try {
     const bodyParams = new URLSearchParams();
-    bodyParams.append('product_permalink', GUMROAD_PERMALINK);
+    bodyParams.append('product_id', GUMROAD_PRODUCT_ID);
     bodyParams.append('license_key', licenseKey);
     bodyParams.append('increment_uses_count', 'true');
     

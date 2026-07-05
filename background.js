@@ -62,7 +62,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const url = 'https://api.gumroad.com/v2/licenses/verify';
     
     const bodyParams = new URLSearchParams();
-    bodyParams.append('product_permalink', message.productPermalink || 'indeedharvest');
+    bodyParams.append('product_id', message.productId || 'Wu_Q1_gcogy2qS9mCM0LFw==');
     bodyParams.append('license_key', message.licenseKey);
     bodyParams.append('increment_uses_count', 'true');
     
