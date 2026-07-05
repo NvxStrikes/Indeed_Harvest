@@ -74,6 +74,9 @@ function extractJobsOnPage() {
     const jk = el.getAttribute('data-jk');
     if (!jk || processedJks.has(jk)) continue;
     
+    // Skip known placeholders/templates
+    if (jk === 'fedcba9876543210' || jk.toLowerCase().includes('placeholder')) continue;
+    
     // Find the enclosing card container
     let container = el;
     if (!el.classList.contains('cardOutline') && !el.querySelector('[data-testid="company-name"]')) {
@@ -82,12 +85,61 @@ function extractJobsOnPage() {
     
     const job = extractJobFromCard(container, jk);
     if (job) {
+      // Validate that it is not an empty skeleton card loader
+      if (!job.title && !job.company) {
+        console.log('IndeedHarvest: Skipping empty skeleton card for jk:', jk);
+        continue;
+      }
       jobs.push(job);
       processedJks.add(jk);
     }
   }
   
   return jobs;
+}
+
+// Defensive fallback date extraction
+function extractDateDefensively(cardEl) {
+  const selectors = ['span.date', '[data-testid="myJobsState"]', '.myJobsState', 'span[class*="date"]', '.date', 'td.underTitle'];
+  for (const sel of selectors) {
+    const el = cardEl.querySelector(sel);
+    if (el && el.innerText.trim()) {
+      return el.innerText.replace(/Employer|Active|Posted/gi, '').trim();
+    }
+  }
+  
+  // Fallback element keyword scan
+  const elements = cardEl.querySelectorAll('span, div');
+  for (const el of elements) {
+    if (el.children.length === 0) { // Leaf node
+      const text = el.innerText.trim();
+      if (/posted|day|today|yesterday|active/i.test(text)) {
+        if (/\d+\+?\s+day/i.test(text) || /just\s+posted/i.test(text) || /today/i.test(text) || /yesterday/i.test(text) || /active\s+\d+/i.test(text) || /posted\s+\d+/i.test(text)) {
+          return text.replace(/Employer|Active|Posted/gi, '').trim();
+        }
+      }
+    }
+  }
+  return '';
+}
+
+// Workplace badge / text extractor
+function extractWorkplaceType(cardEl) {
+  const badgeEl = cardEl.querySelector('span[class*="workplace"], div[class*="workplace"], [data-testid="workplace-badge"], .workplaceBadge, .workplace-type');
+  if (badgeEl) {
+    const text = badgeEl.innerText.trim().toLowerCase();
+    if (text.includes('remote')) return 'Remote';
+    if (text.includes('hybrid')) return 'Hybrid';
+    if (text.includes('on-site') || text.includes('onsite') || text.includes('in-person') || text.includes('in person') || text.includes('in-office') || text.includes('in office')) return 'On-site';
+  }
+  
+  const locationEl = cardEl.querySelector('[data-testid="text-location"], .companyLocation, .location');
+  if (locationEl) {
+    const locText = locationEl.innerText.trim().toLowerCase();
+    if (locText.includes('hybrid')) return 'Hybrid';
+    if (locText.includes('remote')) return 'Remote';
+  }
+  return ''; // Leave empty if not explicitly declared on card
 }
 
 // Extract fields from a single job card container
@@ -112,23 +164,14 @@ function extractJobFromCard(cardEl, jk) {
     const salaryEl = cardEl.querySelector(SELECTORS.salary);
     const salary = salaryEl ? salaryEl.innerText.trim() : '';
     
-    // 5. Date
-    const dateEl = cardEl.querySelector(SELECTORS.date);
-    const date = dateEl ? dateEl.innerText.replace(/Employer|Active|Posted/gi, '').trim() : '';
+    // 5. Date (defensive scanning fallback)
+    const date = extractDateDefensively(cardEl);
     
     // 6. Direct Link URL
     const url = `${window.location.origin}/viewjob?jk=${jk}`;
     
-    // Workplace badge (Remote/Hybrid/On-site) from card text
-    let workplaceType = '';
-    const cardText = cardEl.innerText;
-    if (/remote/i.test(cardText)) {
-      workplaceType = 'Remote';
-    } else if (/hybrid/i.test(cardText)) {
-      workplaceType = 'Hybrid';
-    } else {
-      workplaceType = 'On-site';
-    }
+    // 7. Workplace badge (Remote/Hybrid/On-site)
+    const workplaceType = extractWorkplaceType(cardEl);
     
     return {
       jk,
@@ -185,6 +228,102 @@ async function scrapeDetailsForJobs(jobs, proUnlocked) {
   return jobs;
 }
 
+// Extract company size from detail page
+function extractCompanySizeDefensively(doc) {
+  const selectors = ['.js-JobMetadataHeader-item', '.jobsearch-JobDescriptionSection-sectionItem', '.jobsearch-CompanyInfoContainer', '[class*="companySize"]'];
+  for (const sel of selectors) {
+    const elements = doc.querySelectorAll(sel);
+    for (const el of elements) {
+      const text = el.innerText.trim();
+      if (/employees/i.test(text) || /company size/i.test(text)) {
+        return text.replace(/Employees|Company size|Size/gi, '').trim();
+      }
+    }
+  }
+  
+  // Scan leaf nodes
+  const leafNodes = doc.querySelectorAll('div, span, li, td');
+  for (const el of leafNodes) {
+    if (el.children.length === 0) {
+      const text = el.innerText.trim();
+      if (/employees/i.test(text) && /\d+/.test(text)) {
+        return text.replace(/Employees/gi, '').trim();
+      }
+      if (/company size/i.test(text) && /\d+/.test(text)) {
+        return text.replace(/Company size|Size/gi, '').replace(/^[:\s]+/g, '').trim();
+      }
+    }
+  }
+  return '';
+}
+
+// Extract workplace type from details page
+function extractWorkplaceTypeFromDetail(doc) {
+  const selectors = [
+    'span[class*="workplace"]',
+    'div[class*="workplace"]',
+    '[data-testid="workplace-badge"]',
+    '.workplaceBadge',
+    '.jobsearch-JobMetadataHeader-item',
+    '.jobsearch-JobDescriptionSection-sectionItem'
+  ];
+  
+  for (const sel of selectors) {
+    const elements = doc.querySelectorAll(sel);
+    for (const el of elements) {
+      const text = el.innerText.trim().toLowerCase();
+      if (text.includes('remote')) return 'Remote';
+      if (text.includes('hybrid')) return 'Hybrid';
+      if (text.includes('on-site') || text.includes('onsite') || text.includes('in-office') || text.includes('in office') || text.includes('in-person')) return 'On-site';
+    }
+  }
+  
+  // Strict description text matches
+  const descEl = doc.querySelector('#jobDescriptionText') || doc.querySelector('.jobsearch-JobComponent-description');
+  if (descEl) {
+    const descText = descEl.innerText.trim().toLowerCase();
+    if (/work\s+location:\s*remote|100%\s*remote|fully\s*remote/i.test(descText)) {
+      return 'Remote';
+    }
+    if (/work\s+location:\s*hybrid|hybrid\s*schedule|hybrid\s*remote/i.test(descText)) {
+      return 'Hybrid';
+    }
+    if (/work\s+location:\s*in\s*person|in-office|in\s*office|work\s+location:\s*on-site/i.test(descText)) {
+      return 'On-site';
+    }
+  }
+  return '';
+}
+
+// Extract outbound application link
+function extractApplyLink(doc, jobUrl) {
+  const selectors = [
+    '#applyButtonLinkContainer a',
+    'a[data-testid="indeed-apply-button"]',
+    '#indeedApplyButton',
+    '.jobsearch-CallToActionButton a',
+    'a[href*="clk"]',
+    'a[href*="applystart"]'
+  ];
+  
+  for (const sel of selectors) {
+    const el = doc.querySelector(sel);
+    if (el && el.href) {
+      return el.href;
+    }
+  }
+  
+  // Anchor scan
+  const anchors = doc.querySelectorAll('a');
+  for (const a of anchors) {
+    const text = a.innerText.trim().toLowerCase();
+    if (text.includes('apply on company') || text.includes('apply now') || text.includes('go to application')) {
+      if (a.href) return a.href;
+    }
+  }
+  return jobUrl;
+}
+
 // Same-origin background fetch for job details page
 async function fetchDescriptionAndApplyLink(jk) {
   const result = { description: '', companySize: '', workplaceType: '', applyLink: '' };
@@ -202,32 +341,13 @@ async function fetchDescriptionAndApplyLink(jk) {
     result.description = descEl ? descEl.innerText.trim() : '';
     
     // 2. Company size
-    // Indeed often lists job/company metadata headers
-    const metadataItems = doc.querySelectorAll('.js-JobMetadataHeader-item, .jobsearch-JobDescriptionSection-sectionItem');
-    for (const item of metadataItems) {
-      const text = item.innerText;
-      if (/employees/i.test(text) || /company size/i.test(text)) {
-        result.companySize = text.replace(/Employees|Company size|Size/gi, '').trim();
-      }
-    }
+    result.companySize = extractCompanySizeDefensively(doc);
     
     // 3. Workplace badges (Remote/Hybrid/On-site)
-    const bodyText = doc.body.innerText;
-    if (/remote/i.test(bodyText)) {
-      result.workplaceType = 'Remote';
-    } else if (/hybrid/i.test(bodyText)) {
-      result.workplaceType = 'Hybrid';
-    } else {
-      result.workplaceType = 'On-site';
-    }
+    result.workplaceType = extractWorkplaceTypeFromDetail(doc);
     
     // 4. Direct Apply Link
-    const applyButton = doc.querySelector('a[data-testid="indeed-apply-button"], #indeedApplyButton, a[href*="apply"]');
-    if (applyButton && applyButton.href) {
-      result.applyLink = applyButton.href;
-    } else {
-      result.applyLink = url; // Fallback to Indeed viewjob link
-    }
+    result.applyLink = extractApplyLink(doc, url);
   } catch (e) {
     console.error('IndeedHarvest: Error details fetch for jk', jk, e);
   }
