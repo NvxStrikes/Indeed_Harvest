@@ -104,7 +104,11 @@ function extractDateDefensively(cardEl) {
   for (const sel of selectors) {
     const el = cardEl.querySelector(sel);
     if (el && el.innerText.trim()) {
-      return el.innerText.replace(/Employer|Active|Posted/gi, '').trim();
+      const text = el.innerText.trim();
+      // Must not be a replies/responsiveness badge
+      if (!/replies/i.test(text)) {
+        return text.replace(/Employer|Active|Posted/gi, '').trim();
+      }
     }
   }
   
@@ -113,8 +117,18 @@ function extractDateDefensively(cardEl) {
   for (const el of elements) {
     if (el.children.length === 0) { // Leaf node
       const text = el.innerText.trim();
-      if (/posted|day|today|yesterday|active/i.test(text)) {
-        if (/\d+\+?\s+day/i.test(text) || /just\s+posted/i.test(text) || /today/i.test(text) || /yesterday/i.test(text) || /active\s+\d+/i.test(text) || /posted\s+\d+/i.test(text)) {
+      if (!/replies/i.test(text) && /posted|day|today|yesterday|active/i.test(text)) {
+        // Strict match on confirmed date-posted phrasing patterns only
+        const isGenuineDate = /just\s+posted/i.test(text) || 
+                              /today/i.test(text) || 
+                              /yesterday/i.test(text) || 
+                              /active\s+today/i.test(text) || 
+                              /active\s+yesterday/i.test(text) ||
+                              /active\s+\d+\+?\s+day/i.test(text) || 
+                              /posted\s+\d+\+?\s+day/i.test(text) ||
+                              /\d+\+?\s+day[s]?\s+ago/i.test(text) ||
+                              /\d+\+?\s+hour[s]?\s+ago/i.test(text);
+        if (isGenuineDate) {
           return text.replace(/Employer|Active|Posted/gi, '').trim();
         }
       }
@@ -274,21 +288,40 @@ function extractWorkplaceTypeFromDetail(doc) {
       const text = el.innerText.trim().toLowerCase();
       if (text.includes('remote')) return 'Remote';
       if (text.includes('hybrid')) return 'Hybrid';
-      if (text.includes('on-site') || text.includes('onsite') || text.includes('in-office') || text.includes('in office') || text.includes('in-person')) return 'On-site';
+      if (text.includes('on-site') || text.includes('onsite') || text.includes('in-person') || text.includes('in person') || text.includes('in-office') || text.includes('in office')) return 'On-site';
     }
   }
   
-  // Strict description text matches
+  // Strict description text matches against the full description text
   const descEl = doc.querySelector('#jobDescriptionText') || doc.querySelector('.jobsearch-JobComponent-description');
   if (descEl) {
-    const descText = descEl.innerText.trim().toLowerCase();
-    if (/work\s+location:\s*remote|100%\s*remote|fully\s*remote/i.test(descText)) {
+    const descText = descEl.innerText.trim();
+    const lowerText = descText.toLowerCase();
+    
+    // Check exact location strings (case-insensitive, accommodating different spacing/separators)
+    if (/work\s*location\s*[:\-]?\s*remote/i.test(lowerText)) {
       return 'Remote';
     }
-    if (/work\s+location:\s*hybrid|hybrid\s*schedule|hybrid\s*remote/i.test(descText)) {
+    if (/work\s*location\s*[:\-]?\s*hybrid/i.test(lowerText)) {
       return 'Hybrid';
     }
-    if (/work\s+location:\s*in\s*person|in-office|in\s*office|work\s+location:\s*on-site/i.test(descText)) {
+    if (/work\s*location\s*[:\-]?\s*in\s*person/i.test(lowerText) || 
+        /work\s*location\s*[:\-]?\s*on\-site/i.test(lowerText) || 
+        /work\s*location\s*[:\-]?\s*in\-office/i.test(lowerText) || 
+        /work\s*location\s*[:\-]?\s*in\s*office/i.test(lowerText)) {
+      return 'On-site';
+    }
+    
+    // Fallback search for general Location label
+    if (/location\s*[:\-]\s*remote/i.test(lowerText)) {
+      return 'Remote';
+    }
+    if (/location\s*[:\-]\s*hybrid/i.test(lowerText)) {
+      return 'Hybrid';
+    }
+    if (/location\s*[:\-]\s*in\s*person/i.test(lowerText) || 
+        /location\s*[:\-]\s*on\-site/i.test(lowerText) || 
+        /location\s*[:\-]\s*in\-office/i.test(lowerText)) {
       return 'On-site';
     }
   }
